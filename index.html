@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f7f2">
+  <meta name="description" content="Два тренировочных варианта отборочного тура «Бельчонка» по математике для второго класса.">
+  <title>Бельчонок — математика, 2 класс</title>
+  <link rel="stylesheet" href="./style.css">
+  <script defer src="./questions.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-content">
+      <button class="brand" id="home-button" type="button" aria-label="Бельчонок — к выбору вариантов">
+        <span class="brand-icon" aria-hidden="true">Б</span>
+        <span>Бельчонок <small>Тренировочный отбор</small></span>
+      </button>
+      <span class="grade">Математика · 2 класс</span>
+    </div>
+  </header>
+  <main class="shell" id="app">
+    <noscript><p>Включи JavaScript в браузере, чтобы вводить ответы и получать баллы.</p></noscript>
+  </main>
+  <dialog id="confirm" aria-labelledby="dialog-title" aria-describedby="dialog-message">
+    <h2 id="dialog-title"></h2>
+    <p id="dialog-message"></p>
+    <form method="dialog" class="actions">
+      <button class="button secondary" value="cancel" autofocus>Отмена</button>
+      <button class="button primary" id="confirm-action" value="confirm"></button>
+    </form>
+  </dialog>
+</body>
+</html>
