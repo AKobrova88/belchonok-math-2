@@ -3,12 +3,17 @@
 const variants = window.quizVariants;
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#confirm");
+const participant = document.querySelector("#participant");
+const participantName = participant.querySelector("#participant-name");
+const participantError = participant.querySelector("#participant-error");
+const journal = window.resultJournal;
 const storageKey = "belchonok-math2:attempts:v1";
 
 let attempts = readAttempts();
 let activeVariant = 0;
 let confirmWork = null;
 let dialogOpener = null;
+let pendingStart = null;
 
 function readAttempts() {
   try {
@@ -23,6 +28,9 @@ function readAttempts() {
         current: Number.isInteger(attempt.current) && attempt.current >= 0 && attempt.current < variant.length
           ? attempt.current : 0,
         finished: attempt.finished === true,
+        name: journal.normalizeName(attempt.name),
+        attemptId: journal.validId(attempt.attemptId) ? attempt.attemptId : null,
+        recorded: attempt.recorded === true,
       };
     });
   } catch {
@@ -99,24 +107,60 @@ function fill(template, values) {
   return template.replace(/@([a-z]+)/gi, (_, name) => String(values[name]));
 }
 
-function start(variantIndex) {
-  activeVariant = variantIndex;
-  attempts[variantIndex] = {
-    answers: variants[variantIndex].map(() => ""),
-    current: 0,
-    finished: false,
-  };
-  saveAttempts();
-  showQuestion();
+function askName(resume = false) {
+  pendingStart = { index: activeVariant, resume, opener: document.activeElement };
+  participantName.value = "";
+  participantName.removeAttribute("aria-invalid");
+  participantError.hidden = true;
+  participant.querySelector("#start-participant").textContent = resume ? "Продолжить пробник" : "Начать пробник";
+  participant.showModal();
+  participantName.focus();
 }
 
 function openVariant(index) {
   activeVariant = index;
   const attempt = attempts[index];
-  if (!attempt) start(index);
+  if (!attempt) askName();
   else if (attempt.finished) showResult();
+  else if (!attempt.name || !attempt.attemptId) askName(true);
   else showQuestion();
 }
+
+participant.querySelector("#participant-form").addEventListener("submit", event => {
+  event.preventDefault();
+  if (!pendingStart) return;
+  const name = journal.normalizeName(participantName.value);
+  if (!name) {
+    participantError.hidden = false;
+    participantName.setAttribute("aria-invalid", "true");
+    participantName.focus();
+    return;
+  }
+  const { index, resume } = pendingStart;
+  pendingStart = null;
+  const previous = resume ? attempts[index] : null;
+  attempts[index] = {
+    answers: previous?.answers ?? variants[index].map(() => ""),
+    current: previous?.current ?? 0,
+    name,
+    attemptId: crypto.randomUUID(),
+    finished: false,
+    recorded: false,
+  };
+  participant.close();
+  activeVariant = index;
+  saveAttempts();
+  showQuestion();
+});
+participantName.addEventListener("input", () => {
+  participantError.hidden = true;
+  participantName.removeAttribute("aria-invalid");
+});
+participant.querySelector("#cancel-participant").addEventListener("click", () => participant.close());
+participant.addEventListener("close", () => {
+  pendingStart?.opener?.focus();
+  pendingStart = null;
+});
 
 function pluralPoints(n) {
   const last = n % 10;
@@ -261,12 +305,14 @@ function askToFinish() {
 
 function showResult() {
   const variant = variants[activeVariant];
-  const result = evaluate(variant, attempts[activeVariant].answers);
+  const attempt = attempts[activeVariant];
+  const result = evaluate(variant, attempt.answers);
   setView(fill(
     '<div class="view-top"><h1 tabindex="-1">Результат · @title</h1><button class="text-button" type="button" data-home>К вариантам</button></div>' +
     '<section class="score-panel" aria-label="Итог"><div><div class="score-line"><strong class="score-value">@total</strong>' +
     '<span class="score-total">из 100 баллов</span></div><p class="score-detail">Верных ответов: @correct из @max</p></div>' +
     '<button class="button secondary" type="button" data-retry>Пройти ещё раз</button></section>' +
+    '<div class="actions journal-status" hidden><p role="status"></p><button type="button" class="button secondary" data-resend hidden>Отправить ещё раз</button></div>' +
     '<section class="review" aria-labelledby="review-title"><h2 id="review-title">Разбор задач</h2><div id="review-items"></div></section>',
     { title: variantTitle(), total: result.total, correct: result.correct, max: variant.length },
   ));
@@ -291,6 +337,37 @@ function showResult() {
     details.querySelector(".explanation").textContent = question.explanation;
     list.append(details);
   });
+  if (attempt.name && attempt.attemptId) sendResult(activeVariant, result);
+}
+
+async function sendResult(index, result = evaluate(variants[index], attempts[index].answers)) {
+  const attempt = attempts[index];
+  const status = app.querySelector(".journal-status");
+  if (!status) return;
+  const message = status.querySelector("p");
+  const again = status.querySelector("[data-resend]");
+  status.hidden = false;
+  status.removeAttribute("data-failed");
+  again.hidden = true;
+  if (attempt.recorded) {
+    message.textContent = "Результат отправлен в журнал.";
+    return;
+  }
+  message.textContent = "Отправляем результат в журнал…";
+  const ok = await journal.submit({
+    attemptId: attempt.attemptId,
+    name: attempt.name,
+    variant: index + 1,
+    correct: result.questions.map(item => item.correct),
+  });
+  if (ok && attempts[index] === attempt) {
+    attempt.recorded = true;
+    saveAttempts();
+  }
+  if (!status.isConnected) return;
+  message.textContent = ok ? "Результат отправлен в журнал." : "Результат пока не отправлен. Попробуй ещё раз, когда появится связь.";
+  status.toggleAttribute("data-failed", !ok);
+  again.hidden = ok;
 }
 
 dialog.addEventListener("close", () => {
@@ -309,10 +386,17 @@ app.addEventListener("click", event => {
   else if ("jump" in target.dataset) goTo(Number(target.dataset.jump));
   else if ("back" in target.dataset) goTo(attempts[activeVariant].current - 1);
   else if ("finish" in target.dataset) askToFinish();
+  else if ("resend" in target.dataset) sendResult(activeVariant);
   else if ("retry" in target.dataset) {
-    ask("Начать заново?", "Предыдущие ответы этого варианта будут заменены новой попыткой.", "Начать заново", () => start(activeVariant));
+    ask("Начать заново?", "В браузере вместо предыдущей попытки появится новая.", "Начать заново", () => askName());
   }
 });
 
 document.querySelector("#home-button").addEventListener("click", () => showHome());
+window.addEventListener("online", () => {
+  const attempt = attempts[activeVariant];
+  if (attempt?.finished && attempt.name && !attempt.recorded && app.querySelector(".journal-status")) sendResult(activeVariant);
+  else journal.retryPending();
+});
 showHome(false);
+journal.retryPending();

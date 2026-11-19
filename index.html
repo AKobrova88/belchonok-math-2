@@ -6,9 +6,10 @@
   <meta name="theme-color" content="#f6f7f2">
   <meta name="description" content="Два тренировочных варианта отборочного тура «Бельчонка» по математике для второго класса.">
   <title>Бельчонок — математика, 2 класс</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=2">
   <script defer src="./questions.js"></script>
-  <script defer src="./app.js"></script>
+  <script defer src="./journal.js?v=2"></script>
+  <script defer src="./app.js?v=2"></script>
 </head>
 <body>
   <header class="site-header">
@@ -23,6 +24,21 @@
   <main class="shell" id="app">
     <noscript><p>Включи JavaScript в браузере, чтобы вводить ответы и получать баллы.</p></noscript>
   </main>
+  <dialog id="participant" aria-labelledby="participant-title">
+    <h2 id="participant-title">Перед началом</h2>
+    <form id="participant-form">
+      <div class="answer-block">
+        <label for="participant-name">Как тебя зовут?</label>
+        <input id="participant-name" type="text" maxlength="40" autocomplete="off" required aria-describedby="participant-help">
+        <p class="field-help" id="participant-help">Введи имя или имя с первой буквой фамилии. После пробника взрослый увидит твоё имя, вариант и баллы.</p>
+        <p class="field-help field-error" id="participant-error" role="alert" hidden>Введи имя буквами. Можно добавить инициал.</p>
+      </div>
+      <div class="actions participant-actions">
+        <button class="button secondary" type="button" id="cancel-participant">Отмена</button>
+        <button class="button primary" type="submit" id="start-participant">Начать пробник</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="confirm" aria-labelledby="dialog-title" aria-describedby="dialog-message">
     <h2 id="dialog-title"></h2>
     <p id="dialog-message"></p>
